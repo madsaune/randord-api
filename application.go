@@ -27,37 +27,37 @@ func (app *application) routes() *mux.Router {
 func (app *application) indexHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
-	var c int
-	var err error
-
-	count, ok := vars["count"]
-	if !ok {
-		c = 10
-	} else {
-		c, err = strconv.Atoi(count)
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			return
-		}
+	countVar := vars["count"]
+	count, err := strconv.Atoi(countVar)
+	if err != nil {
+		// defaults to 10 words
+		count = 10
 	}
 
+	// Limit result to 100 words
+	if count > 100 {
+		count = 100
+	}
+
+	// Get the prefered format
 	acceptHeader := r.Header.Get("Accept")
 	if acceptHeader == "" {
 		acceptHeader = "application/json"
 	}
 
+	// Generate list of words
 	var words []string
-
-	for i := 0; i < c; i += 1 {
+	for i := 0; i < count; i += 1 {
 		word := app.wordlist[randInt(0, len(app.wordlist)-1)]
 		words = append(words, strings.Title(word))
 	}
 
 	resp := response{
-		Count: c,
+		Count: count,
 		Words: words,
 	}
 
+	// Respond based on Accept header
 	switch acceptHeader {
 	case "text/html":
 		w.Header().Set("Content-Type", "text/plain")
@@ -68,7 +68,9 @@ func (app *application) indexHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		data, err := resp.EncodeJSON()
 		if err != nil {
-			app.errorLog.Fatalf("could not build json response: %v", err)
+			app.errorLog.Printf("could not build json response: %v", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
